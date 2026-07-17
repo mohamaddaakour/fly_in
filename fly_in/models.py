@@ -5,7 +5,7 @@ from enum import Enum
 
 
 # an enum for different zone types
-class zoneType(str, Enum):
+class ZoneType(str, Enum):
     """Supported zone behavior types."""
 
     NORMAL = "normal"

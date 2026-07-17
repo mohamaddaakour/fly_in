@@ -52,3 +52,19 @@ line.removeprefix("nb_drones:".strip())
 # ternary operator
 0 if zone.zone_type == ZoneType.PRIORITY else 1
 ```
+
+```python
+string: str = "hello"
+
+# count is a built in method to count how many characters
+# we have in the string
+print(string.count("l")) # 2
+```
+
+```python
+string: str = "hello"
+
+# index is a built in method to give us the index
+# of a specific character (first occurence)
+print(string.index("l")) # 2
+```
