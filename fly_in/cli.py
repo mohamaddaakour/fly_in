@@ -3,10 +3,9 @@
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
-from fly_in.models import Connection, MapData, Zone
+from fly_in.models import MapData, Connection
 from fly_in.parser import MapParser, ParseError
 from fly_in.pathfinder import Pathfinder, PathNotFoundError
-
 
 def argument_parser() -> ArgumentParser:
     """Create the command-line argument parser."""
@@ -42,10 +41,9 @@ def main() -> int:
     except (ParseError, PathNotFoundError) as error:
         print(f"Error: {error}")
         return 1
-
-    print_map_summary(map_data)
-    print(f"Path: {' -> '.join(path)}")
-    print(f"Cost: {pathfinder.path_cost(path)}")
+    if args.summary:
+        print_map_summary(map_data, path, pathfinder.path_cost(path))
+    print("\n".join(turns))
     return 0
 
 
