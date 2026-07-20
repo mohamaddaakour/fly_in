@@ -7,3 +7,8 @@ class ZoneType(str, Enum):
     RESTRICTED = "restricted"
     PRIORITY = "priority"
 ```
+
+```python
+# Convert the enum to a string.
+ZoneType.NORMAL.value
+```

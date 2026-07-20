@@ -28,5 +28,6 @@ args: Namespace = parser.parse_args()
 
 ```python
 # here we create a path object for the path of map_file
+# argument that we take it from the terminal argument
 map_path: Path = Path(args.map_file)
 ```

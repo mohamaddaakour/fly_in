@@ -13,9 +13,7 @@ class ZoneType(str, Enum):
     BLOCKED = "blocked"
     PRIORITY = "priority"
 
-# frozen=True means when the properties are initialized they
-# can't be changed
-# drones move from a zone to another zone until they achieve the end zone
+
 @dataclass(frozen=True)
 class Zone:
     """A zone in the drone network.
@@ -34,7 +32,7 @@ class Zone:
     name: str
     x: int
     y: int
-    zone_type: str
+    zone_type: ZoneType
     color: str
     max_drones: int
     is_start: bool

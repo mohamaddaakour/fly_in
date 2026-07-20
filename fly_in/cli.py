@@ -1,4 +1,4 @@
-"""Command-line interface for the Fly-in simulator."""
+"""Command-line interface for the Fly-in pathfinder."""
 
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
@@ -8,60 +8,37 @@ from fly_in.parser import MapParser, ParseError
 from fly_in.pathfinder import Pathfinder, PathNotFoundError
 
 
-# parse the map file path from the command line
 def argument_parser() -> ArgumentParser:
-    """Create the command-line argument parser.
-
-    Returns:
-        The configured argument parser.
-    """
-
-    parser: ArgumentParser = ArgumentParser(
-        prog="fly_in",
-        description="Route drones through connected zones"
+    """Create the command-line argument parser."""
+    parser = ArgumentParser(
+        prog="fly_in", description="Route drones through connected zones"
     )
-
-    # nars="?" means we may take a value as argument and may not
-    # if we didn't take by default take what inside default
     parser.add_argument(
         "map_file",
         nargs="?",
         default="maps/example.map",
-        help="Path to a fly_in map file"
+        help="Path to a Fly-in map file",
     )
-
     return parser
 
 
 def main() -> int:
-    """Run the Fly-in command-line program.
-
-    Returns:
-        Process exit status code.
-    """
-
-    parser: ArgumentParser = argument_parser()
-    
-    # to apply the parsing
+    """Parse a map and display its minimum-cost Phase 3 path."""
+    parser = argument_parser()
     args: Namespace = parser.parse_args()
-
-    # we take the value of parsed argument with name map_file
-    # Path will create an instance of the class Path
-    map_path: Path = Path(args.map_file)
+    map_path = Path(str(args.map_file))
 
     if not map_path.exists():
         print(f"Error: map file not found: {map_path}")
         return 1
-    
     if not map_path.is_file():
         print(f"Error: map path is not a file: {map_path}")
         return 1
-    
 
     try:
-        map_data: MapData = MapParser().parse_file(map_path)
+        map_data = MapParser().parse_file(map_path)
         pathfinder = Pathfinder(map_data)
-        path: list[str] = pathfinder.find_shortest_path()
+        path = pathfinder.find_shortest_path()
     except (ParseError, PathNotFoundError) as error:
         print(f"Error: {error}")
         return 1
@@ -73,11 +50,7 @@ def main() -> int:
 
 
 def print_map_summary(map_data: MapData) -> None:
-    """Print a human-readable summary of parsed map data.
-
-    Args:
-        map_data: Parsed map data to display.
-    """
+    """Print all parsed Phase 2 map data."""
     print(f"Drones: {map_data.drone_count}")
     print(f"Start: {map_data.start_name}")
     print(f"End: {map_data.end_name}")
@@ -90,7 +63,8 @@ def print_map_summary(map_data: MapData) -> None:
 
 
 def format_zone(zone: Zone) -> str:
-    label: str = "hub"
+    """Format one zone for the parser summary."""
+    label = "hub"
     if zone.is_start:
         label = "start_hub"
     elif zone.is_end:
@@ -103,6 +77,7 @@ def format_zone(zone: Zone) -> str:
 
 
 def format_connection(connection: Connection) -> str:
+    """Format one connection for the parser summary."""
     return (
         f"  connection: {connection.name()} "
         f"max_link_capacity={connection.max_link_capacity}"

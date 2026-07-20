@@ -1,5 +1,6 @@
 ```python
-# min heap
+# heapq implements a priority queue (min-heap)
+
 # the element with the min priority will be at the beginning
 from heapq import heappop, heappush
 
