@@ -92,8 +92,10 @@ class Drone:
         identifier: Positive identifier displayed after the letter ``D``.
         path_index: Current position in the shared path.
         delivered: Whether the drone has reached the end hub.
+        transit_turns_remaining: Turns before a restricted-zone arrival.
     """
 
     identifier: int
     path_index: int = 0
     delivered: bool = False
+    transit_turns_remaining: int = 0

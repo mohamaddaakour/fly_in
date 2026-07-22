@@ -8,7 +8,7 @@ Fly-in is a Python drone-routing simulator. The final program will parse a graph
 zones, route multiple drones from a start hub to an end hub, and output each
 simulation turn while respecting zone and connection capacity rules.
 
-Current phase: Phase 5. The program strictly parses and validates map files,
+Current phase: Phase 6. The program strictly parses and validates map files,
 finds one minimum-cost valid path, and moves every drone through that shared
 path one turn at a time. Blocked zones are excluded, entering a restricted zone
 has pathfinding cost two, and priority zones win equal-cost path ties.
@@ -81,14 +81,25 @@ the beginning of each turn. A move is approved only when both its destination
 zone and its connection have capacity. This prevents link overuse while still
 letting a drone moving out free zone space for another drone in the same turn.
 
-For Phase 5, each edge still takes one simulation turn. The two-turn transit
-behavior of restricted zones belongs to Phase 6.
+## Restricted-Zone Transit
+
+Entering a restricted zone takes exactly two turns. On the first turn, the
+drone leaves its source, reserves capacity in the destination, occupies the
+connection, and prints `D<ID>-<source>-<destination>`. On the following turn it
+must arrive and prints `D<ID>-<destination>`; it cannot wait or move again in
+that turn. A restricted end hub remains unlimited.
+
+In-transit drones do not occupy their old zone. They do occupy connection
+capacity through their arrival turn, so a capacity-one restricted link cannot
+accept another drone until the next turn. Destination reservations are counted
+alongside physical occupancy, preventing another movement from taking a slot
+already promised to an arriving drone.
 
 With `D` drones, path length `P`, and `T` turns, initialization is `O(D)`.
-Occupancy, connection usage, and movement processing are `O(D)` per turn, while
-ordering active drones is `O(D log D)`. Total simulation time is
-`O(T * D log D)`. Cached connection capacities use `O(E)` memory, so live state
-uses `O(D + P + E)` memory, excluding retained output lines.
+Occupancy, reservations, connection usage, and movement processing are `O(D)`
+per turn, while ordering active drones is `O(D log D)`. Total simulation time
+is `O(T * D log D)`. Cached connection capacities use `O(E)` memory, so live
+state uses `O(D + P + E)` memory, excluding retained output lines.
 
 ## Resources
 
