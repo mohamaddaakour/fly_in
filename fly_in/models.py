@@ -1,6 +1,6 @@
 """Domain models for Fly-in maps."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -93,9 +93,11 @@ class Drone:
         path_index: Current position in the shared path.
         delivered: Whether the drone has reached the end hub.
         transit_turns_remaining: Turns before a restricted-zone arrival.
+        assigned_path: Route selected for this drone.
     """
 
     identifier: int
     path_index: int = 0
     delivered: bool = False
     transit_turns_remaining: int = 0
+    assigned_path: list[str] = field(default_factory=list)

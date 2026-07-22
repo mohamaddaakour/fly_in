@@ -38,8 +38,8 @@ def main() -> int:
     try:
         map_data = MapParser().parse_file(map_path)
         pathfinder = Pathfinder(map_data)
-        path = pathfinder.find_shortest_path()
-        turns = Simulation(map_data, path).run()
+        paths = pathfinder.find_paths()
+        turns = Simulation(map_data, paths).run()
     except ParseError as error:
         print(f"Parsing error: {error}")
         return 1

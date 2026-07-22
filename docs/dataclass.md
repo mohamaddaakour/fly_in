@@ -12,3 +12,16 @@ class Zone:
     is_start: bool = False
     is_end: bool = False
 ```
+
+```python
+@dataclass
+class Drone:
+    # here int is immutable so when we use @dataclass
+    # we can give it an initial value
+    transit_turns_remaining: int = 0
+
+    # but list is mutable so when we use @dataclass we can't
+    # give it an initial value so instead we use this field
+    # that will create an empty list by default
+    assigned_path: list[str] = field(default_factory=list)
+```

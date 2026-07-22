@@ -8,10 +8,11 @@ Fly-in is a Python drone-routing simulator. The final program will parse a graph
 zones, route multiple drones from a start hub to an end hub, and output each
 simulation turn while respecting zone and connection capacity rules.
 
-Current phase: Phase 6. The program strictly parses and validates map files,
-finds one minimum-cost valid path, and moves every drone through that shared
-path one turn at a time. Blocked zones are excluded, entering a restricted zone
-has pathfinding cost two, and priority zones win equal-cost path ties.
+Current phase: Phase 7. The program strictly parses and validates map files,
+discovers multiple weighted routes, distributes drones by expected completion
+time, and simulates all assigned paths together. Blocked zones are excluded,
+entering a restricted zone costs two turns, and priority zones win equal-cost
+path ties.
 
 ## Instructions
 
@@ -95,11 +96,35 @@ accept another drone until the next turn. Destination reservations are counted
 alongside physical occupancy, preventing another movement from taking a slot
 already promised to an arriving drone.
 
+## Multiple Paths and Distribution
+
+The pathfinder uses Yen's algorithm over the custom constrained Dijkstra search
+to discover the cheapest loopless alternatives. Routes are ordered by weighted
+cost, number of priority zones, hop count, and zone names. Results are cached by
+the requested route count and returned as defensive copies.
+
+Each drone owns an independent copy of its assigned route. Assignment estimates
+the next completion time from route latency, zone capacity, link capacity, and
+the two-turn occupancy of restricted links. This allows shorter or higher-
+throughput routes to receive more drones instead of using naive round-robin
+distribution. Equal estimates prefer lower cost and then priority routes.
+
+Zone occupancy, restricted reservations, and connection usage remain global.
+Consequently, disjoint paths can progress in parallel while overlapping paths
+still respect shared bottlenecks. More advanced rerouting around runtime
+congestion remains part of Phase 8.
+
 With `D` drones, path length `P`, and `T` turns, initialization is `O(D)`.
 Occupancy, reservations, connection usage, and movement processing are `O(D)`
 per turn, while ordering active drones is `O(D log D)`. Total simulation time
 is `O(T * D log D)`. Cached connection capacities use `O(E)` memory, so live
-state uses `O(D + P + E)` memory, excluding retained output lines.
+state uses `O(D + R + E)` memory, excluding retained output lines, where `R`
+is the total number of zone entries across discovered routes.
+
+For `K` requested paths, Yen's algorithm performs up to `O(K * V)` constrained
+Dijkstra searches, each `O((V + E) log V)`. Assignment is `O(D * K * P)` with
+the current transparent completion estimator. Cached routes require `O(K * P)`
+additional memory.
 
 ## Resources
 

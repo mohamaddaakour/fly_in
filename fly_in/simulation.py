@@ -1,6 +1,12 @@
-"""Capacity-aware simulation with restricted-zone transit."""
+"""Multi-route capacity-aware drone simulation."""
+
+from typing import cast
 
 from fly_in.models import Drone, MapData, ZoneType
+
+
+ConnectionKey = tuple[str, str]
+Occupancy = dict[str, int]
 
 
 class SimulationError(Exception):
@@ -8,31 +14,65 @@ class SimulationError(Exception):
 
 
 class Simulation:
-    """Move all drones through one shared, capacity-safe path."""
+    """Assign drones to routes and simulate all movements safely."""
 
-    def __init__(self, map_data: MapData, path: list[str]) -> None:
-        """Validate input and initialize every drone at the start hub."""
+    def __init__(
+        self,
+        map_data: MapData,
+        paths: list[str] | list[list[str]],
+    ) -> None:
+        """Validate routes, assign drones, and initialize shared state."""
         self.map_data = map_data
-        self.path = path.copy()
         self.connection_capacities = self.build_connection_capacities()
-        self.validate_path()
+        self.paths = self.normalize_paths(paths)
+        for path in self.paths:
+            self.validate_path(path)
         if map_data.drone_count <= 0:
             raise SimulationError("drone count must be positive")
+
+        # Retained as a read-only compatibility view of the first route.
+        self.path = self.paths[0]
+        assignments = self.assign_paths(map_data.drone_count)
         self.drones = [
-            Drone(identifier=identifier)
-            for identifier in range(1, map_data.drone_count + 1)
+            Drone(identifier=identifier, assigned_path=assigned_path.copy())
+            for identifier, assigned_path in enumerate(assignments, start=1)
         ]
 
+    def normalize_paths(
+        self, paths: list[str] | list[list[str]]
+    ) -> list[list[str]]:
+        """Copy either one route or a collection of routes and deduplicate."""
+        if not paths:
+            raise SimulationError("at least one path is required")
+        first = paths[0]
+        if isinstance(first, str):
+            normalized = [cast(list[str], paths).copy()]
+        else:
+            normalized = [
+                path.copy() for path in cast(list[list[str]], paths)
+            ]
+        if any(not path for path in normalized):
+            raise SimulationError("paths cannot be empty")
+
+        unique: list[list[str]] = []
+        seen: set[tuple[str, ...]] = set()
+        for path in normalized:
+            key = tuple(path)
+            if key not in seen:
+                unique.append(path)
+                seen.add(key)
+        return unique
+
     @staticmethod
-    def connection_key(zone_a: str, zone_b: str) -> tuple[str, str]:
+    def connection_key(zone_a: str, zone_b: str) -> ConnectionKey:
         """Return one direction-independent key for a connection."""
         return (
             (zone_a, zone_b) if zone_a < zone_b else (zone_b, zone_a)
         )
 
-    def build_connection_capacities(self) -> dict[tuple[str, str], int]:
+    def build_connection_capacities(self) -> dict[ConnectionKey, int]:
         """Cache each bidirectional connection's per-turn capacity."""
-        capacities: dict[tuple[str, str], int] = {}
+        capacities: dict[ConnectionKey, int] = {}
         for connection in self.map_data.connections:
             if connection.max_link_capacity <= 0:
                 raise SimulationError(
@@ -48,20 +88,20 @@ class Simulation:
             capacities[key] = connection.max_link_capacity
         return capacities
 
-    def validate_path(self) -> None:
-        """Ensure the shared path is complete, accessible, and connected."""
-        if len(self.path) < 2:
+    def validate_path(self, path: list[str]) -> None:
+        """Ensure one route is complete, accessible, and connected."""
+        if len(path) < 2:
             raise SimulationError("path must contain at least start and end")
-        if self.path[0] != self.map_data.start_name:
+        if path[0] != self.map_data.start_name:
             raise SimulationError(
                 f"path must start at '{self.map_data.start_name}'"
             )
-        if self.path[-1] != self.map_data.end_name:
+        if path[-1] != self.map_data.end_name:
             raise SimulationError(
                 f"path must end at '{self.map_data.end_name}'"
             )
 
-        for name in self.path:
+        for name in path:
             zone = self.map_data.zones.get(name)
             if zone is None:
                 raise SimulationError(f"unknown zone '{name}' in path")
@@ -71,17 +111,81 @@ class Simulation:
                 raise SimulationError(
                     f"zone '{name}' has invalid capacity"
                 )
-
-        for source, destination in zip(self.path, self.path[1:]):
+        for source, destination in zip(path, path[1:]):
             key = self.connection_key(source, destination)
             if key not in self.connection_capacities:
                 raise SimulationError(
                     f"no connection between '{source}' and '{destination}'"
                 )
 
+    def path_cost(self, path: list[str]) -> int:
+        """Return actual travel turns for one unloaded route."""
+        return sum(
+            2
+            if self.map_data.zones[name].zone_type == ZoneType.RESTRICTED
+            else 1
+            for name in path[1:]
+        )
+
+    def path_priority_count(self, path: list[str]) -> int:
+        """Count preferred zones on a route for deterministic ties."""
+        return sum(
+            self.map_data.zones[name].zone_type == ZoneType.PRIORITY
+            for name in path[1:]
+        )
+
+    def expected_completion(self, path: list[str], load: int) -> int:
+        """Estimate when the next assigned drone would finish this route."""
+        congestion = 0
+        for source, destination in zip(path, path[1:]):
+            capacity = self.connection_capacities[
+                self.connection_key(source, destination)
+            ]
+            interval = (
+                2
+                if self.map_data.zones[destination].zone_type
+                == ZoneType.RESTRICTED
+                else 1
+            )
+            congestion = max(congestion, interval * (load // capacity))
+        for name in path[1:-1]:
+            capacity = self.map_data.zones[name].max_drones
+            congestion = max(congestion, load // capacity)
+        return self.path_cost(path) + congestion
+
+    def assign_paths(self, drone_count: int) -> list[list[str]]:
+        """Assign each drone to its lowest expected completion time."""
+        loads = [0] * len(self.paths)
+        assignments: list[list[str]] = []
+        for _ in range(drone_count):
+            index = min(
+                range(len(self.paths)),
+                key=lambda path_index: (
+                    self.expected_completion(
+                        self.paths[path_index], loads[path_index]
+                    ),
+                    self.path_cost(self.paths[path_index]),
+                    -self.path_priority_count(self.paths[path_index]),
+                    len(self.paths[path_index]),
+                    tuple(self.paths[path_index]),
+                ),
+            )
+            assignments.append(self.paths[index])
+            loads[index] += 1
+        return assignments
+
+    def drone_path(self, drone: Drone) -> list[str]:
+        """Return a drone's validated assigned route."""
+        if not drone.assigned_path:
+            raise SimulationError(
+                f"drone D{drone.identifier} has no assigned path"
+            )
+        return drone.assigned_path
+
     def validate_drone_state(self, drone: Drone) -> None:
         """Reject impossible delivery, path-index, or transit state."""
-        last_index = len(self.path) - 1
+        path = self.drone_path(drone)
+        last_index = len(path) - 1
         if drone.path_index < 0 or drone.path_index > last_index:
             raise SimulationError(
                 f"invalid path index for drone D{drone.identifier}"
@@ -104,7 +208,7 @@ class Simulation:
                 f"invalid delivery state for drone D{drone.identifier}"
             )
         if drone.transit_turns_remaining == 1:
-            destination = self.path[drone.path_index + 1]
+            destination = path[drone.path_index + 1]
             if (
                 self.map_data.zones[destination].zone_type
                 != ZoneType.RESTRICTED
@@ -114,14 +218,15 @@ class Simulation:
                     f"invalid transit destination for drone {drone_name}"
                 )
 
-    def build_occupancy(self) -> dict[str, int]:
-        """Count drones physically inside intermediate zones."""
-        occupancy: dict[str, int] = {}
+    def build_occupancy(self) -> Occupancy:
+        """Count drones physically inside shared intermediate zones."""
+        occupancy: Occupancy = {}
         for drone in self.drones:
             self.validate_drone_state(drone)
             if drone.delivered or drone.transit_turns_remaining > 0:
                 continue
-            zone_name = self.path[drone.path_index]
+            path = self.drone_path(drone)
+            zone_name = path[drone.path_index]
             if zone_name in (
                 self.map_data.start_name,
                 self.map_data.end_name,
@@ -130,28 +235,29 @@ class Simulation:
             occupancy[zone_name] = occupancy.get(zone_name, 0) + 1
         return occupancy
 
-    def build_reservations(self) -> dict[str, int]:
+    def build_reservations(self) -> Occupancy:
         """Count destination slots promised to in-transit drones."""
-        reservations: dict[str, int] = {}
+        reservations: Occupancy = {}
         for drone in self.drones:
             self.validate_drone_state(drone)
             if drone.transit_turns_remaining == 0:
                 continue
-            destination = self.path[drone.path_index + 1]
+            path = self.drone_path(drone)
+            destination = path[drone.path_index + 1]
             if destination == self.map_data.end_name:
                 continue
             reservations[destination] = reservations.get(destination, 0) + 1
-
         return reservations
 
-    def build_connection_usage(self) -> dict[tuple[str, str], int]:
+    def build_connection_usage(self) -> dict[ConnectionKey, int]:
         """Count links occupied by drones completing transit this turn."""
-        usage: dict[tuple[str, str], int] = {}
+        usage: dict[ConnectionKey, int] = {}
         for drone in self.drones:
             if drone.transit_turns_remaining == 0:
                 continue
-            source = self.path[drone.path_index]
-            destination = self.path[drone.path_index + 1]
+            path = self.drone_path(drone)
+            source = path[drone.path_index]
+            destination = path[drone.path_index + 1]
             key = self.connection_key(source, destination)
             usage[key] = usage.get(key, 0) + 1
         return usage
@@ -160,11 +266,11 @@ class Simulation:
         self,
         source: str,
         destination: str,
-        occupancy: dict[str, int],
-        reservations: dict[str, int],
-        connection_usage: dict[tuple[str, str], int],
+        occupancy: Occupancy,
+        reservations: Occupancy,
+        connection_usage: dict[ConnectionKey, int],
     ) -> bool:
-        """Check link capacity and all promised destination capacity."""
+        """Check global link and promised destination capacity."""
         key = self.connection_key(source, destination)
         if (
             connection_usage.get(key, 0)
@@ -178,9 +284,11 @@ class Simulation:
         )
         return used_capacity < self.map_data.zones[destination].max_drones
 
-    def free_source(self, drone: Drone, occupancy: dict[str, int]) -> None:
+    def free_source(
+        self, drone: Drone, path: list[str], occupancy: Occupancy
+    ) -> None:
         """Release a drone's intermediate source-zone capacity."""
-        source = self.path[drone.path_index]
+        source = path[drone.path_index]
         if source in (self.map_data.start_name, self.map_data.end_name):
             return
         source_count = occupancy.get(source, 0)
@@ -189,10 +297,14 @@ class Simulation:
         occupancy[source] = source_count - 1
 
     def apply_normal_move(
-        self, drone: Drone, destination: str, occupancy: dict[str, int]
+        self,
+        drone: Drone,
+        path: list[str],
+        destination: str,
+        occupancy: Occupancy,
     ) -> None:
         """Apply a one-turn movement into a non-restricted zone."""
-        self.free_source(drone, occupancy)
+        self.free_source(drone, path, occupancy)
         if destination != self.map_data.end_name:
             occupancy[destination] = occupancy.get(destination, 0) + 1
         drone.path_index += 1
@@ -202,12 +314,13 @@ class Simulation:
     def begin_restricted_transit(
         self,
         drone: Drone,
+        path: list[str],
         destination: str,
-        occupancy: dict[str, int],
-        reservations: dict[str, int],
+        occupancy: Occupancy,
+        reservations: Occupancy,
     ) -> None:
-        """Put a drone on a link and reserve its required destination slot."""
-        self.free_source(drone, occupancy)
+        """Put a drone on a link and reserve its destination slot."""
+        self.free_source(drone, path, occupancy)
         if destination != self.map_data.end_name:
             reservations[destination] = reservations.get(destination, 0) + 1
         drone.transit_turns_remaining = 1
@@ -215,12 +328,13 @@ class Simulation:
     def complete_restricted_transit(
         self,
         drone: Drone,
-        occupancy: dict[str, int],
-        reservations: dict[str, int],
+        occupancy: Occupancy,
+        reservations: Occupancy,
     ) -> str:
-        """Force an in-transit drone to arrive at its reserved destination."""
+        """Force an in-transit drone into its reserved destination."""
         self.validate_drone_state(drone)
-        destination = self.path[drone.path_index + 1]
+        path = self.drone_path(drone)
+        destination = path[drone.path_index + 1]
         if destination != self.map_data.end_name:
             reserved = reservations.get(destination, 0)
             if reserved <= 0:
@@ -242,8 +356,18 @@ class Simulation:
             drone.delivered = True
         return destination
 
+    def remaining_cost(self, drone: Drone) -> int:
+        """Return remaining weighted turns for movement ordering."""
+        path = self.drone_path(drone)
+        return sum(
+            2
+            if self.map_data.zones[name].zone_type == ZoneType.RESTRICTED
+            else 1
+            for name in path[drone.path_index + 1:]
+        )
+
     def run_turn(self) -> list[tuple[int, str]]:
-        """Run one simultaneous turn and return successful movements."""
+        """Run one simultaneous turn across all assigned routes."""
         occupancy = self.build_occupancy()
         reservations = self.build_reservations()
         connection_usage = self.build_connection_usage()
@@ -275,12 +399,13 @@ class Simulation:
                 and drone.identifier not in moved_ids
                 and drone.transit_turns_remaining == 0
             ),
-            key=lambda drone: (-drone.path_index, drone.identifier),
+            key=lambda drone: (self.remaining_cost(drone), drone.identifier),
         )
         for drone in active_drones:
             self.validate_drone_state(drone)
-            source = self.path[drone.path_index]
-            destination = self.path[drone.path_index + 1]
+            path = self.drone_path(drone)
+            source = path[drone.path_index]
+            destination = path[drone.path_index + 1]
             if not self.can_depart(
                 source,
                 destination,
@@ -297,12 +422,13 @@ class Simulation:
                 == ZoneType.RESTRICTED
             ):
                 self.begin_restricted_transit(
-                    drone, destination, occupancy, reservations
+                    drone, path, destination, occupancy, reservations
                 )
-                connection_name = f"{source}-{destination}"
-                movement = f"D{drone.identifier}-{connection_name}"
+                movement = f"D{drone.identifier}-{source}-{destination}"
             else:
-                self.apply_normal_move(drone, destination, occupancy)
+                self.apply_normal_move(
+                    drone, path, destination, occupancy
+                )
                 movement = f"D{drone.identifier}-{destination}"
             movements.append((drone.identifier, movement))
 

@@ -1,0 +1,11 @@
+nb_drones: 4
+start_hub: start 0 0
+end_hub: end 4 0
+hub: north 1 1
+hub: south 1 -1
+hub: merge 3 0 [max_drones=2]
+connection: start-north
+connection: start-south
+connection: north-merge
+connection: south-merge
+connection: merge-end [max_link_capacity=2]
