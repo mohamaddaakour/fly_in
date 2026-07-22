@@ -1,0 +1,6 @@
+nb_drones: 4
+start_hub: start 0 0
+end_hub: end 2 0
+hub: waiting 1 0 [max_drones=2]
+connection: start-waiting
+connection: waiting-end

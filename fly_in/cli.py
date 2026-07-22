@@ -1,11 +1,11 @@
-"""Command-line interface for the Fly-in pathfinder."""
+"""Command-line interface for the Fly-in simulator."""
 
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
-from fly_in.models import Connection, MapData, Zone
 from fly_in.parser import MapParser, ParseError
 from fly_in.pathfinder import Pathfinder, PathNotFoundError
+from fly_in.simulation import Simulation, SimulationError
 
 
 def argument_parser() -> ArgumentParser:
@@ -23,7 +23,7 @@ def argument_parser() -> ArgumentParser:
 
 
 def main() -> int:
-    """Parse a map and display its minimum-cost Phase 3 path."""
+    """Parse a map, find one path, and print its capacity-safe simulation."""
     parser = argument_parser()
     args: Namespace = parser.parse_args()
     map_path = Path(str(args.map_file))
@@ -39,45 +39,17 @@ def main() -> int:
         map_data = MapParser().parse_file(map_path)
         pathfinder = Pathfinder(map_data)
         path = pathfinder.find_shortest_path()
-    except (ParseError, PathNotFoundError) as error:
-        print(f"Error: {error}")
+        turns = Simulation(map_data, path).run()
+    except ParseError as error:
+        print(f"Parsing error: {error}")
         return 1
-    print_map_summary(map_data)
-    print(f"Path: {' -> '.join(path)}")
-    print(f"Cost: {pathfinder.path_cost(path)}")
+    except PathNotFoundError as error:
+        print(f"Pathfinding error: {error}")
+        return 1
+    except SimulationError as error:
+        print(f"Simulation error: {error}")
+        return 1
+
+    for turn in turns:
+        print(turn)
     return 0
-
-
-def print_map_summary(map_data: MapData) -> None:
-    """Print all parsed Phase 2 map data."""
-    print(f"Drones: {map_data.drone_count}")
-    print(f"Start: {map_data.start_name}")
-    print(f"End: {map_data.end_name}")
-    print("Zones:")
-    for zone in map_data.zones.values():
-        print(format_zone(zone))
-    print("Connections:")
-    for connection in map_data.connections:
-        print(format_connection(connection))
-
-
-def format_zone(zone: Zone) -> str:
-    """Format one zone for the parser summary."""
-    label = "hub"
-    if zone.is_start:
-        label = "start_hub"
-    elif zone.is_end:
-        label = "end_hub"
-    return (
-        f"  {label}: {zone.name} ({zone.x}, {zone.y}) "
-        f"zone={zone.zone_type.value} color={zone.color} "
-        f"max_drones={zone.max_drones}"
-    )
-
-
-def format_connection(connection: Connection) -> str:
-    """Format one connection for the parser summary."""
-    return (
-        f"  connection: {connection.name()} "
-        f"max_link_capacity={connection.max_link_capacity}"
-    )

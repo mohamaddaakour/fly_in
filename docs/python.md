@@ -50,3 +50,11 @@ string: str = "hello"
 # of a specific character (first occurence)
 print(string.index("l")) # 2
 ```
+
+```python
+# when we put values inside of { } instead of keys and values
+# we create a set not a dictionary
+arr = {1, 2, 3}
+
+print(type(arr)) # <class 'set'>
+```

@@ -82,3 +82,18 @@ class MapData:
 
     # list of connections instances
     connections: list[Connection]
+
+
+@dataclass
+class Drone:
+    """Represent one drone moving through its assigned path.
+
+    Attributes:
+        identifier: Positive identifier displayed after the letter ``D``.
+        path_index: Current position in the shared path.
+        delivered: Whether the drone has reached the end hub.
+    """
+
+    identifier: int
+    path_index: int = 0
+    delivered: bool = False
