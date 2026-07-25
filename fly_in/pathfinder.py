@@ -19,14 +19,23 @@ class Pathfinder:
     def __init__(self, map_data: MapData) -> None:
         """Build and cache a deterministic bidirectional adjacency list."""
         self.map_data = map_data
+
+        # Zones as keys and their adjacent zones as list
+        # Initialize empty lists
         self.adjacency: dict[str, list[str]] = {
             name: [] for name in map_data.zones
         }
+
+        # Fill the adjacency values.
         for connection in map_data.connections:
             self.adjacency[connection.zone_a].append(connection.zone_b)
             self.adjacency[connection.zone_b].append(connection.zone_a)
+
+        # Every zone’s neighbor list is sorted alphabetically.
         for neighbors in self.adjacency.values():
             neighbors.sort()
+
+        # This stores previously calculated path results.
         self._path_cache: dict[int, tuple[tuple[str, ...], ...]] = {}
 
     def find_shortest_path(self) -> list[str]:

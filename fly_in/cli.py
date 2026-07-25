@@ -48,7 +48,7 @@ def main() -> int:
         simulation = Simulation(
             map_data,
             paths,
-            capture_snapshots=bool(args.visual),
+            capture_snapshots=args.visual,
         )
         turns = simulation.run()
     except ParseError as error:
@@ -61,10 +61,8 @@ def main() -> int:
         print(f"Simulation error: {error}")
         return 1
 
-    if bool(args.visual):
-        visualizer = TerminalVisualizer(map_data)
-        for line in visualizer.render(turns, simulation.snapshots):
-            print(line)
+    if args.visual:
+        TerminalVisualizer(map_data).animate(turns, simulation.snapshots)
     else:
         for turn in turns:
             print(turn)

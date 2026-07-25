@@ -138,24 +138,18 @@ Visual mode is deliberately optional. Without `--visual`, the program prints
 only official `D<ID>-<zone>` or `D<ID>-<connection>` movement lines, keeping the
 output suitable for automated evaluation.
 
-With `--visual`, the terminal renderer shows:
-
-- A colored network legend with zone type, coordinates, and capacity
-- Every connection and its traversal capacity
-- A numbered section for each simulation turn
-- Movements colored using their destination zone's `color` metadata
-- Current drone occupancy grouped by zone
-- Drones currently in flight on restricted connections
-- Cumulative delivered-drone progress
+With `--visual`, Python's built-in `tkinter` library opens an animation window.
+Zones are placed using their map coordinates, connections are drawn as lines,
+and numbered drones move smoothly from one zone to the next. Tkinter is used
+only for drawing; pathfinding and graph logic remain in the project code.
+Redirected output prints each final frame as text for scripts and tests.
 
 Common color names use standard ANSI colors. Because the subject permits any
 single-word color, unknown names are converted deterministically into 24-bit
 terminal colors. A zone with `color=none` remains uncolored.
 
-The display makes capacity bottlenecks, waiting, parallel routes, and restricted
-two-turn movement visible without changing scheduling behavior. Simulation
-snapshots are immutable display data captured after each turn, keeping rendering
-separate from routing and movement decisions.
+This keeps the visual code separate from routing and movement decisions, so
+visual mode cannot change the simulation result.
 
 In visual mode, capturing snapshots adds `O(T * D)` retained display memory.
 Rendering takes

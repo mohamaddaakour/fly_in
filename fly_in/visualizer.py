@@ -1,13 +1,16 @@
-"""ANSI terminal visualization for Fly-in simulations."""
+"""Simple Tkinter animation for the drone simulation."""
 
-from fly_in.models import MapData, SimulationSnapshot, Zone
+import sys
+import time
+
+from fly_in.models import MapData, SimulationSnapshot
 
 
 class TerminalVisualizer:
-    """Render colored network metadata, movements, and turn states."""
+    """Turn simulation snapshots into simple terminal frames."""
 
     RESET = "\033[0m"
-    NAMED_COLORS: dict[str, str] = {
+    COLORS = {
         "black": "30",
         "red": "31",
         "green": "32",
@@ -23,121 +26,205 @@ class TerminalVisualizer:
     }
 
     def __init__(self, map_data: MapData) -> None:
-        """Store map metadata used to color and describe the simulation."""
         self.map_data = map_data
 
     def ansi_code(self, color: str) -> str | None:
-        """Return an ANSI foreground code for any non-``none`` color."""
-        normalized = color.lower()
-        if normalized == "none":
+        """Get a terminal color, including a stable color for custom names."""
+        color = color.lower()
+        if color == "none":
             return None
-        named = self.NAMED_COLORS.get(normalized)
-        if named is not None:
-            return named
+        if color in self.COLORS:
+            return self.COLORS[color]
 
-        accumulator = 2166136261
-        for character in normalized:
-            accumulator ^= ord(character)
-            accumulator = (accumulator * 16777619) & 0xFFFFFFFF
-        red = 64 + (accumulator & 0xBF)
-        green = 64 + ((accumulator >> 8) & 0xBF)
-        blue = 64 + ((accumulator >> 16) & 0xBF)
+        value = 2166136261
+        for character in color:
+            value = ((value ^ ord(character)) * 16777619) & 0xFFFFFFFF
+        red = 64 + (value & 0xBF)
+        green = 64 + ((value >> 8) & 0xBF)
+        blue = 64 + ((value >> 16) & 0xBF)
         return f"38;2;{red};{green};{blue}"
 
     def colorize(self, text: str, color: str) -> str:
-        """Wrap text in a zone's ANSI color, when one is configured."""
         code = self.ansi_code(color)
-        if code is None:
-            return text
-        return f"\033[{code}m{text}{self.RESET}"
+        return text if code is None else f"\033[{code}m{text}{self.RESET}"
 
-    def format_zone(self, zone: Zone) -> str:
-        """Format one colored zone entry for the network legend."""
-        if zone.is_start or zone.is_end:
-            capacity = "unlimited"
-        else:
-            capacity = str(zone.max_drones)
-        name = self.colorize(zone.name, zone.color)
-        return (
-            f"  {name}: type={zone.zone_type.value} "
-            f"capacity={capacity} position=({zone.x},{zone.y})"
-        )
+    @staticmethod
+    def drone_list(identifiers: tuple[int, ...]) -> str:
+        return "[" + ",".join(f"D{number}" for number in identifiers) + "]"
 
-    def movement_destination(self, movement: str) -> str:
-        """Extract a destination zone from a movement token."""
+    def destination(self, movement: str) -> str:
+        """Get the destination from D1-zone or D1-source-zone."""
         payload = movement.split("-", 1)[1]
         if payload in self.map_data.zones:
             return payload
         return payload.rsplit("-", 1)[-1]
 
-    def format_movement(self, movement: str) -> str:
-        """Color a movement using its destination zone metadata."""
-        destination = self.movement_destination(movement)
-        zone = self.map_data.zones.get(destination)
+    def colored_movement(self, movement: str) -> str:
+        zone = self.map_data.zones.get(self.destination(movement))
         if zone is None:
             return movement
         return self.colorize(movement, zone.color)
 
-    @staticmethod
-    def format_identifiers(identifiers: tuple[int, ...]) -> str:
-        """Format drone identifiers compactly for a state line."""
-        names = ",".join(f"D{identifier}" for identifier in identifiers)
-        return f"[{names}]"
-
-    def format_snapshot(self, snapshot: SimulationSnapshot) -> list[str]:
-        """Render zone occupancy, transit state, and delivery progress."""
-        zone_parts: list[str] = []
-        for name in sorted(snapshot.zone_drones):
+    def frame(
+        self, turn_number: int, movement: str, snapshot: SimulationSnapshot
+    ) -> list[str]:
+        """Build one compact frame showing every current drone position."""
+        zone_parts = []
+        for name, identifiers in snapshot.zone_drones.items():
             zone = self.map_data.zones[name]
-            label = self.colorize(name, zone.color)
-            drones = self.format_identifiers(snapshot.zone_drones[name])
-            zone_parts.append(f"{label}={drones}")
-        if not zone_parts:
-            zone_parts.append("none")
+            zone_parts.append(
+                f"{self.colorize(name, zone.color)}="
+                f"{self.drone_list(identifiers)}"
+            )
 
-        lines = ["  Zones: " + " ".join(zone_parts)]
-        if snapshot.connection_drones:
-            connection_parts = [
-                f"{name}={self.format_identifiers(identifiers)}"
-                for name, identifiers in sorted(
-                    snapshot.connection_drones.items()
-                )
-            ]
-            lines.append("  In flight: " + " ".join(connection_parts))
-        else:
-            lines.append("  In flight: none")
-        lines.append(
-            "  Delivered: "
-            f"{snapshot.delivered_count}/{self.map_data.drone_count}"
+        flight_parts = [
+            f"{name}={self.drone_list(identifiers)}"
+            for name, identifiers in snapshot.connection_drones.items()
+        ]
+        moves = " ".join(
+            self.colored_movement(item) for item in movement.split()
         )
-        return lines
+        return [
+            "Fly-in Visual Simulation",
+            f"Turn {turn_number}:",
+            f"  Moves: {moves}",
+            "  Zones: " + ("  |  ".join(zone_parts) or "none"),
+            "  In flight: " + ("  |  ".join(flight_parts) or "none"),
+            "  Delivered: "
+            f"{snapshot.delivered_count}/{self.map_data.drone_count}",
+        ]
 
     def render(
+        self, turns: list[str], snapshots: list[SimulationSnapshot]
+    ) -> list[str]:
+        """Build all frames, mainly for redirected output and tests."""
+        if len(turns) != len(snapshots):
+            raise ValueError("each visual turn requires one state snapshot")
+        lines: list[str] = []
+        for number, (turn, snapshot) in enumerate(zip(turns, snapshots), 1):
+            lines.extend(self.frame(number, turn, snapshot))
+        return lines
+
+    def animate(
         self,
         turns: list[str],
         snapshots: list[SimulationSnapshot],
-    ) -> list[str]:
-        """Return the complete visual terminal output as separate lines."""
+        delay: float = 0.5,
+    ) -> None:
+        """Open a small animation window or print when output is redirected."""
         if len(turns) != len(snapshots):
             raise ValueError("each visual turn requires one state snapshot")
-        lines = ["Fly-in Visual Simulation", "Zones:"]
-        lines.extend(
-            self.format_zone(zone) for zone in self.map_data.zones.values()
-        )
-        lines.append("Connections:")
-        lines.extend(
-            "  "
-            f"{connection.name()} capacity={connection.max_link_capacity}"
-            for connection in self.map_data.connections
-        )
-        for turn_number, (turn, snapshot) in enumerate(
-            zip(turns, snapshots), start=1
-        ):
-            movements = " ".join(
-                self.format_movement(movement)
-                for movement in turn.split()
+
+        if sys.stdout.isatty():
+            try:
+                self.animate_window(turns, delay)
+                return
+            except (ImportError, RuntimeError):
+                pass
+
+        for number, (turn, snapshot) in enumerate(zip(turns, snapshots), 1):
+            print("\n".join(self.frame(number, turn, snapshot)))
+
+    def animate_window(self, turns: list[str], delay: float) -> None:
+        """Draw the map and smoothly move drones with Tkinter."""
+        import tkinter as tk
+
+        try:
+            root = tk.Tk()
+        except tk.TclError as error:
+            raise RuntimeError("Tkinter window is unavailable") from error
+        root.title("Fly-in Drone Animation")
+        canvas = tk.Canvas(root, width=800, height=600, bg="white")
+        canvas.pack()
+
+        # Convert map coordinates to positions that fit inside the window.
+        xs = [zone.x for zone in self.map_data.zones.values()]
+        ys = [zone.y for zone in self.map_data.zones.values()]
+
+        def scale(value: int, values: list[int], size: int) -> float:
+            low, high = min(values), max(values)
+            return 100 + (value - low) * (size - 200) / max(high - low, 1)
+
+        points = {
+            name: (scale(zone.x, xs, 800), scale(zone.y, ys, 600))
+            for name, zone in self.map_data.zones.items()
+        }
+        positions = {
+            number: points[self.map_data.start_name]
+            for number in range(1, self.map_data.drone_count + 1)
+        }
+
+        def draw(turn_number: int) -> None:
+            # Redrawing the small scene is simpler than moving many canvas IDs.
+            canvas.delete("all")
+            for connection in self.map_data.connections:
+                canvas.create_line(
+                    *points[connection.zone_a],
+                    *points[connection.zone_b],
+                    width=2,
+                    fill="#888888",
+                )
+            for name, zone in self.map_data.zones.items():
+                x, y = points[name]
+                color = zone.color if zone.color != "none" else "lightgray"
+                try:
+                    canvas.create_oval(
+                        x - 25, y - 25, x + 25, y + 25,
+                        fill=color, outline="black",
+                    )
+                except tk.TclError:
+                    canvas.create_oval(
+                        x - 25, y - 25, x + 25, y + 25,
+                        fill="lightgray", outline="black",
+                    )
+                canvas.create_text(x, y - 38, text=name)
+            for number, (x, y) in positions.items():
+                offset = ((number - 1) % 5) * 8 - 16
+                canvas.create_oval(
+                    x - 9 + offset, y - 9, x + 9 + offset, y + 9,
+                    fill="#222222",
+                )
+                canvas.create_text(
+                    x + offset, y, text=str(number), fill="white"
+                )
+            canvas.create_text(
+                400, 25, text=f"Turn {turn_number}", font=("Arial", 16)
             )
-            lines.append(f"Turn {turn_number}:")
-            lines.append(f"  Moves: {movements}")
-            lines.extend(self.format_snapshot(snapshot))
-        return lines
+            root.update()
+
+        draw(0)
+        time.sleep(delay)
+        for turn_number, turn in enumerate(turns, 1):
+            # A normal move targets a zone. Restricted transit targets the
+            # middle of its connection until the following arrival turn.
+            targets: dict[int, tuple[float, float]] = {}
+            for movement in turn.split():
+                drone_text, payload = movement.split("-", 1)
+                number = int(drone_text[1:])
+                if payload in points:
+                    targets[number] = points[payload]
+                else:
+                    source, destination = payload.rsplit("-", 1)
+                    start = points[source]
+                    end = points[destination]
+                    targets[number] = (
+                        (start[0] + end[0]) / 2,
+                        (start[1] + end[1]) / 2,
+                    )
+
+            starts = {number: positions[number] for number in targets}
+            # Twenty small position changes make each turn look continuous.
+            for step in range(1, 21):
+                for number, target in targets.items():
+                    start = starts[number]
+                    positions[number] = (
+                        start[0] + (target[0] - start[0]) * step / 20,
+                        start[1] + (target[1] - start[1]) * step / 20,
+                    )
+                draw(turn_number)
+                time.sleep(delay / 20)
+
+        canvas.create_text(
+            400, 570, text="All drones delivered!", font=("Arial", 16)
+        )
+        root.mainloop()

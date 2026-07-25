@@ -123,12 +123,12 @@ class Simulation:
 
     def path_cost(self, path: list[str]) -> int:
         """Return actual travel turns for one unloaded route."""
-        return sum(
-            2
-            if self.map_data.zones[name].zone_type == ZoneType.RESTRICTED
-            else 1
-            for name in path[1:]
-        )
+        return sum(self.movement_cost(name) for name in path[1:])
+
+    def movement_cost(self, destination: str) -> int:
+        """Return the number of turns needed to enter one zone."""
+        zone = self.map_data.zones[destination]
+        return 2 if zone.zone_type == ZoneType.RESTRICTED else 1
 
     def path_priority_count(self, path: list[str]) -> int:
         """Count preferred zones on a route for deterministic ties."""
@@ -144,12 +144,7 @@ class Simulation:
             capacity = self.connection_capacities[
                 self.connection_key(source, destination)
             ]
-            interval = (
-                2
-                if self.map_data.zones[destination].zone_type
-                == ZoneType.RESTRICTED
-                else 1
-            )
+            interval = self.movement_cost(destination)
             congestion = max(congestion, interval * (load // capacity))
         for name in path[1:-1]:
             capacity = self.map_data.zones[name].max_drones
@@ -363,9 +358,7 @@ class Simulation:
         """Return remaining weighted turns for movement ordering."""
         path = self.drone_path(drone)
         return sum(
-            2
-            if self.map_data.zones[name].zone_type == ZoneType.RESTRICTED
-            else 1
+            self.movement_cost(name)
             for name in path[drone.path_index + 1:]
         )
 

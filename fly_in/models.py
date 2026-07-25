@@ -77,7 +77,7 @@ class MapData:
     end_name: str
 
     # here we have an object of zones names as keys
-    # an the zones instances as values
+    # and the zone instances as values
     zones: dict[str, Zone]
 
     # list of connections instances
