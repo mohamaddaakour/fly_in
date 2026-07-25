@@ -41,13 +41,17 @@ class Simulation:
         ]
         self.snapshots: list[SimulationSnapshot] = []
 
+
+    # This method converts the input into one consistent structure.
     def normalize_paths(
         self, paths: list[str] | list[list[str]]
     ) -> list[list[str]]:
         """Copy either one route or a collection of routes and deduplicate."""
         if not paths:
             raise SimulationError("at least one path is required")
+        
         first = paths[0]
+
         if isinstance(first, str):
             normalized = [cast(list[str], paths).copy()]
         else:
@@ -73,9 +77,11 @@ class Simulation:
             (zone_a, zone_b) if zone_a < zone_b else (zone_b, zone_a)
         )
 
+    # Specify for each connection the max capacity
     def build_connection_capacities(self) -> dict[ConnectionKey, int]:
         """Cache each bidirectional connection's per-turn capacity."""
         capacities: dict[ConnectionKey, int] = {}
+
         for connection in self.map_data.connections:
             if connection.max_link_capacity <= 0:
                 raise SimulationError(
@@ -155,6 +161,7 @@ class Simulation:
         """Assign each drone to its lowest expected completion time."""
         loads = [0] * len(self.paths)
         assignments: list[list[str]] = []
+
         for _ in range(drone_count):
             index = min(
                 range(len(self.paths)),
@@ -250,6 +257,7 @@ class Simulation:
     def build_connection_usage(self) -> dict[ConnectionKey, int]:
         """Count links occupied by drones completing transit this turn."""
         usage: dict[ConnectionKey, int] = {}
+        
         for drone in self.drones:
             if drone.transit_turns_remaining == 0:
                 continue
@@ -467,8 +475,10 @@ class Simulation:
     def run(self) -> list[str]:
         """Run turns until all drones are delivered or movement deadlocks."""
         turns: list[str] = []
+
         while not all(drone.delivered for drone in self.drones):
             movements = self.run_turn()
+
             if not movements:
                 raise SimulationError("simulation is deadlocked")
             turns.append(" ".join(text for _, text in movements))

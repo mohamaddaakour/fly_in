@@ -45,12 +45,21 @@ def main() -> int:
         map_data = MapParser().parse_file(map_path)
         pathfinder = Pathfinder(map_data)
         paths = pathfinder.find_paths()
+
         simulation = Simulation(
             map_data,
             paths,
             capture_snapshots=args.visual,
         )
         turns = simulation.run()
+
+        if args.visual:
+            TerminalVisualizer(map_data).animate(
+                turns, simulation.snapshots
+            )
+        else:
+            for turn in turns:
+                print(turn)
     except ParseError as error:
         print(f"Parsing error: {error}")
         return 1
@@ -60,10 +69,7 @@ def main() -> int:
     except SimulationError as error:
         print(f"Simulation error: {error}")
         return 1
-
-    if args.visual:
-        TerminalVisualizer(map_data).animate(turns, simulation.snapshots)
-    else:
-        for turn in turns:
-            print(turn)
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        return 130
     return 0

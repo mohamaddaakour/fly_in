@@ -9,7 +9,10 @@ from fly_in.models import MapData, SimulationSnapshot
 class TerminalVisualizer:
     """Turn simulation snapshots into simple terminal frames."""
 
+    # ANSI code to reset terminal.
     RESET = "\033[0m"
+
+    # ANSI code for colors.
     COLORS = {
         "black": "30",
         "red": "31",
@@ -36,6 +39,7 @@ class TerminalVisualizer:
         if color in self.COLORS:
             return self.COLORS[color]
 
+        # To get the exact ansi code in RGB
         value = 2166136261
         for character in color:
             value = ((value ^ ord(character)) * 16777619) & 0xFFFFFFFF
@@ -50,6 +54,7 @@ class TerminalVisualizer:
 
     @staticmethod
     def drone_list(identifiers: tuple[int, ...]) -> str:
+        """Format drone ID numbers as a compact "[D1,D2]" style string."""
         return "[" + ",".join(f"D{number}" for number in identifiers) + "]"
 
     def destination(self, movement: str) -> str:
@@ -57,7 +62,7 @@ class TerminalVisualizer:
         payload = movement.split("-", 1)[1]
         if payload in self.map_data.zones:
             return payload
-        return payload.rsplit("-", 1)[-1]
+        return payload.split("-", 1)[-1]
 
     def colored_movement(self, movement: str) -> str:
         zone = self.map_data.zones.get(self.destination(movement))
@@ -134,6 +139,18 @@ class TerminalVisualizer:
         except tk.TclError as error:
             raise RuntimeError("Tkinter window is unavailable") from error
         root.title("Fly-in Drone Animation")
+        closed = False
+
+        def close_window() -> None:
+            """Stop animation callbacks before destroying the window."""
+            nonlocal closed
+            closed = True
+            try:
+                root.destroy()
+            except tk.TclError:
+                pass
+
+        root.protocol("WM_DELETE_WINDOW", close_window)
         canvas = tk.Canvas(root, width=800, height=600, bg="white")
         canvas.pack()
 
@@ -154,8 +171,10 @@ class TerminalVisualizer:
             for number in range(1, self.map_data.drone_count + 1)
         }
 
-        def draw(turn_number: int) -> None:
+        def draw(turn_number: int) -> bool:
             # Redrawing the small scene is simpler than moving many canvas IDs.
+            if closed:
+                return False
             canvas.delete("all")
             for connection in self.map_data.connections:
                 canvas.create_line(
@@ -190,11 +209,19 @@ class TerminalVisualizer:
             canvas.create_text(
                 400, 25, text=f"Turn {turn_number}", font=("Arial", 16)
             )
-            root.update()
+            try:
+                root.update()
+            except tk.TclError:
+                close_window()
+                return False
+            return not closed
 
-        draw(0)
+        if not draw(0):
+            return
         time.sleep(delay)
         for turn_number, turn in enumerate(turns, 1):
+            if closed:
+                return
             # A normal move targets a zone. Restricted transit targets the
             # middle of its connection until the following arrival turn.
             targets: dict[int, tuple[float, float]] = {}
@@ -215,16 +242,24 @@ class TerminalVisualizer:
             starts = {number: positions[number] for number in targets}
             # Twenty small position changes make each turn look continuous.
             for step in range(1, 21):
+                if closed:
+                    return
                 for number, target in targets.items():
                     start = starts[number]
                     positions[number] = (
                         start[0] + (target[0] - start[0]) * step / 20,
                         start[1] + (target[1] - start[1]) * step / 20,
                     )
-                draw(turn_number)
+                if not draw(turn_number):
+                    return
                 time.sleep(delay / 20)
 
+        if closed:
+            return
         canvas.create_text(
             400, 570, text="All drones delivered!", font=("Arial", 16)
         )
-        root.mainloop()
+        try:
+            root.mainloop()
+        except tk.TclError:
+            close_window()
