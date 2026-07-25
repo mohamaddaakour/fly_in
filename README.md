@@ -8,11 +8,11 @@ Fly-in is a Python drone-routing simulator. The final program will parse a graph
 zones, route multiple drones from a start hub to an end hub, and output each
 simulation turn while respecting zone and connection capacity rules.
 
-Current phase: Phase 7. The program strictly parses and validates map files,
+Current phase: Phase 9. The program strictly parses and validates map files,
 discovers multiple weighted routes, distributes drones by expected completion
 time, and simulates all assigned paths together. Blocked zones are excluded,
 entering a restricted zone costs two turns, and priority zones win equal-cost
-path ties.
+path ties. An optional colored terminal view displays movements and live state.
 
 ## Instructions
 
@@ -32,6 +32,12 @@ Run with a custom map:
 
 ```bash
 python main.py path/to/map
+```
+
+Run the colored visual representation:
+
+```bash
+python main.py path/to/map --visual
 ```
 
 Run the automated tests and mandatory quality checks:
@@ -69,7 +75,7 @@ of zones and `E` is the number of connections.
 ## Capacity-Aware Simulation
 
 Every drone receives an identifier beginning at `D1` and stores its current
-index in the shared path. Drones closest to the end are evaluated first, which
+index in its assigned path. Drones closest to the end are evaluated first, which
 lets a drone leaving a zone free that capacity for a following drone during the
 same turn. Start and end capacity is unlimited; every intermediate zone obeys
 its `max_drones` value. A drone that cannot enter the next zone waits silently,
@@ -125,6 +131,37 @@ For `K` requested paths, Yen's algorithm performs up to `O(K * V)` constrained
 Dijkstra searches, each `O((V + E) log V)`. Assignment is `O(D * K * P)` with
 the current transparent completion estimator. Cached routes require `O(K * P)`
 additional memory.
+
+## Visual Terminal Output
+
+Visual mode is deliberately optional. Without `--visual`, the program prints
+only official `D<ID>-<zone>` or `D<ID>-<connection>` movement lines, keeping the
+output suitable for automated evaluation.
+
+With `--visual`, the terminal renderer shows:
+
+- A colored network legend with zone type, coordinates, and capacity
+- Every connection and its traversal capacity
+- A numbered section for each simulation turn
+- Movements colored using their destination zone's `color` metadata
+- Current drone occupancy grouped by zone
+- Drones currently in flight on restricted connections
+- Cumulative delivered-drone progress
+
+Common color names use standard ANSI colors. Because the subject permits any
+single-word color, unknown names are converted deterministically into 24-bit
+terminal colors. A zone with `color=none` remains uncolored.
+
+The display makes capacity bottlenecks, waiting, parallel routes, and restricted
+two-turn movement visible without changing scheduling behavior. Simulation
+snapshots are immutable display data captured after each turn, keeping rendering
+separate from routing and movement decisions.
+
+In visual mode, capturing snapshots adds `O(T * D)` retained display memory.
+Rendering takes
+`O(V + E + M + T * D)`, where `M` is the number of printed movements. This cost
+is incurred only when simulation results and snapshots are consumed for visual
+output; official movement semantics remain identical.
 
 ## Resources
 

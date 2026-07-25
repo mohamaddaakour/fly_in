@@ -1,0 +1,16 @@
+nb_drones: 5
+start_hub: start 0 0
+end_hub: end 5 0
+hub: normal1 1 0
+hub: normal2 3 0
+hub: priority1 1 1 [zone=priority]
+hub: priority2 3 1 [zone=priority]
+hub: restricted1 2 -1 [zone=restricted]
+connection: start-normal1
+connection: normal1-normal2
+connection: normal2-end
+connection: start-priority1
+connection: priority1-priority2
+connection: priority2-end
+connection: start-restricted1
+connection: restricted1-end

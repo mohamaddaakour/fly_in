@@ -101,3 +101,18 @@ class Drone:
     delivered: bool = False
     transit_turns_remaining: int = 0
     assigned_path: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SimulationSnapshot:
+    """Describe all drone positions after one simulation turn.
+
+    Attributes:
+        zone_drones: Active drone identifiers grouped by zone.
+        connection_drones: In-transit identifiers grouped by connection.
+        delivered_count: Number of drones that have reached the end.
+    """
+
+    zone_drones: dict[str, tuple[int, ...]]
+    connection_drones: dict[str, tuple[int, ...]]
+    delivered_count: int

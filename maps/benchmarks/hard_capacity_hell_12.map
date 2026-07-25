@@ -1,0 +1,16 @@
+nb_drones: 12
+start_hub: start 0 0
+end_hub: end 7 0
+hub: leftA 1 2 [max_drones=2]
+hub: leftB 1 -2 [max_drones=2]
+hub: gate 3 0 [max_drones=2]
+hub: rightA 5 2 [max_drones=2]
+hub: rightB 5 -2 [max_drones=2]
+connection: start-leftA [max_link_capacity=2]
+connection: start-leftB [max_link_capacity=2]
+connection: leftA-gate
+connection: leftB-gate
+connection: gate-rightA
+connection: gate-rightB
+connection: rightA-end [max_link_capacity=2]
+connection: rightB-end [max_link_capacity=2]

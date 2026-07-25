@@ -1,0 +1,40 @@
+nb_drones: 8
+start_hub: start 0 0
+end_hub: end 8 0
+hub: a1 1 2
+hub: a2 3 2
+hub: a3 5 2
+hub: a4 7 2
+hub: b1 1 0
+hub: b2 3 0
+hub: b3 5 0
+hub: b4 7 0
+hub: c1 1 -2
+hub: c2 3 -2
+hub: c3 5 -2
+hub: c4 7 -2
+hub: wall 4 4 [zone=blocked]
+connection: start-a1
+connection: start-b1
+connection: start-c1
+connection: a1-a2
+connection: a2-a3
+connection: a3-a4
+connection: a4-end
+connection: b1-b2
+connection: b2-b3
+connection: b3-b4
+connection: b4-end
+connection: c1-c2
+connection: c2-c3
+connection: c3-c4
+connection: c4-end
+connection: a1-b1
+connection: b1-c1
+connection: a2-b2
+connection: b2-c2
+connection: a3-b3
+connection: b3-c3
+connection: a4-b4
+connection: b4-c4
+connection: a2-wall

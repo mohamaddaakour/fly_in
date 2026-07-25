@@ -1,0 +1,13 @@
+nb_drones: 4
+start_hub: start 0 0
+end_hub: end 4 0
+hub: north1 1 1
+hub: north2 2 1
+hub: south1 1 -1
+hub: south2 2 -1
+connection: start-north1
+connection: north1-north2
+connection: north2-end
+connection: start-south1
+connection: south1-south2
+connection: south2-end

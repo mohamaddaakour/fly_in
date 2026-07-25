@@ -6,6 +6,7 @@ from pathlib import Path
 from fly_in.parser import MapParser, ParseError
 from fly_in.pathfinder import Pathfinder, PathNotFoundError
 from fly_in.simulation import Simulation, SimulationError
+from fly_in.visualizer import TerminalVisualizer
 
 
 def argument_parser() -> ArgumentParser:
@@ -18,6 +19,11 @@ def argument_parser() -> ArgumentParser:
         nargs="?",
         default="maps/example.map",
         help="Path to a Fly-in map file",
+    )
+    parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="Show colored turns and drone positions",
     )
     return parser
 
@@ -39,7 +45,12 @@ def main() -> int:
         map_data = MapParser().parse_file(map_path)
         pathfinder = Pathfinder(map_data)
         paths = pathfinder.find_paths()
-        turns = Simulation(map_data, paths).run()
+        simulation = Simulation(
+            map_data,
+            paths,
+            capture_snapshots=bool(args.visual),
+        )
+        turns = simulation.run()
     except ParseError as error:
         print(f"Parsing error: {error}")
         return 1
@@ -50,6 +61,11 @@ def main() -> int:
         print(f"Simulation error: {error}")
         return 1
 
-    for turn in turns:
-        print(turn)
+    if bool(args.visual):
+        visualizer = TerminalVisualizer(map_data)
+        for line in visualizer.render(turns, simulation.snapshots):
+            print(line)
+    else:
+        for turn in turns:
+            print(turn)
     return 0

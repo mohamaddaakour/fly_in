@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from fly_in.models import Drone, MapData, ZoneType
+from fly_in.models import Drone, MapData, SimulationSnapshot, ZoneType
 
 
 ConnectionKey = tuple[str, str]
@@ -20,9 +20,11 @@ class Simulation:
         self,
         map_data: MapData,
         paths: list[str] | list[list[str]],
+        capture_snapshots: bool = False,
     ) -> None:
         """Validate routes, assign drones, and initialize shared state."""
         self.map_data = map_data
+        self.capture_snapshots = capture_snapshots
         self.connection_capacities = self.build_connection_capacities()
         self.paths = self.normalize_paths(paths)
         for path in self.paths:
@@ -37,6 +39,7 @@ class Simulation:
             Drone(identifier=identifier, assigned_path=assigned_path.copy())
             for identifier, assigned_path in enumerate(assignments, start=1)
         ]
+        self.snapshots: list[SimulationSnapshot] = []
 
     def normalize_paths(
         self, paths: list[str] | list[list[str]]
@@ -435,6 +438,39 @@ class Simulation:
         movements.sort(key=lambda movement: movement[0])
         return movements
 
+    def capture_snapshot(self) -> SimulationSnapshot:
+        """Capture immutable, display-ready positions for the current state."""
+        zones: dict[str, list[int]] = {}
+        connections: dict[str, list[int]] = {}
+        delivered_count = 0
+        for drone in self.drones:
+            self.validate_drone_state(drone)
+            if drone.delivered:
+                delivered_count += 1
+                continue
+            path = self.drone_path(drone)
+            if drone.transit_turns_remaining > 0:
+                source = path[drone.path_index]
+                destination = path[drone.path_index + 1]
+                connection = f"{source}-{destination}"
+                connections.setdefault(connection, []).append(
+                    drone.identifier
+                )
+                continue
+            zone = path[drone.path_index]
+            zones.setdefault(zone, []).append(drone.identifier)
+        return SimulationSnapshot(
+            zone_drones={
+                name: tuple(identifiers)
+                for name, identifiers in zones.items()
+            },
+            connection_drones={
+                name: tuple(identifiers)
+                for name, identifiers in connections.items()
+            },
+            delivered_count=delivered_count,
+        )
+
     def run(self) -> list[str]:
         """Run turns until all drones are delivered or movement deadlocks."""
         turns: list[str] = []
@@ -443,4 +479,6 @@ class Simulation:
             if not movements:
                 raise SimulationError("simulation is deadlocked")
             turns.append(" ".join(text for _, text in movements))
+            if self.capture_snapshots:
+                self.snapshots.append(self.capture_snapshot())
         return turns
