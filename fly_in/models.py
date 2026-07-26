@@ -108,8 +108,8 @@ class SimulationSnapshot:
     """Describe all drone positions after one simulation turn.
 
     Attributes:
-        zone_drones: Active drone identifiers grouped by zone.
-        connection_drones: In-transit identifiers grouped by connection.
+        zone_drones: which drones are currently inside each zone.
+        connection_drones: which drones are currently travelling between zones.
         delivered_count: Number of drones that have reached the end.
     """
 
