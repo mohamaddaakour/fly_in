@@ -1,7 +1,8 @@
 PYTHON = python
 MAP ?= maps/example.map
+MAPS_DIR ?= maps
 
-.PHONY: install run debug clean lint lint-strict test
+.PHONY: install run debug clean lint lint-strict test run-all benchmark
 
 install:
 	$(PYTHON) -m pip install flake8 mypy pytest

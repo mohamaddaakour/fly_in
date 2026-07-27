@@ -119,7 +119,6 @@ class Pathfinder:
 
             if not candidates:
                 break
-            
             _, candidate_key, next_path = heappop(candidates)
             candidate_keys.remove(candidate_key)
             selected.append(next_path)

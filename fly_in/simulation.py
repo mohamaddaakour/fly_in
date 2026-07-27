@@ -41,7 +41,6 @@ class Simulation:
         ]
         self.snapshots: list[SimulationSnapshot] = []
 
-
     # This method converts the input into one consistent structure.
     def normalize_paths(
         self, paths: list[str] | list[list[str]]
@@ -49,7 +48,7 @@ class Simulation:
         """Copy either one route or a collection of routes and deduplicate."""
         if not paths:
             raise SimulationError("at least one path is required")
-        
+
         first = paths[0]
 
         if isinstance(first, str):
@@ -257,7 +256,7 @@ class Simulation:
     def build_connection_usage(self) -> dict[ConnectionKey, int]:
         """Count links occupied by drones completing transit this turn."""
         usage: dict[ConnectionKey, int] = {}
-        
+
         for drone in self.drones:
             if drone.transit_turns_remaining == 0:
                 continue
