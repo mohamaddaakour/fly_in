@@ -107,6 +107,8 @@ class TerminalVisualizer:
             raise ValueError("each visual turn requires one state snapshot")
         lines: list[str] = []
         for number, (turn, snapshot) in enumerate(zip(turns, snapshots), 1):
+            # extend() is a list method that adds all the items
+            # from an iterable to the end of a list.
             lines.extend(self.frame(number, turn, snapshot))
         return lines
 
@@ -139,6 +141,11 @@ class TerminalVisualizer:
         except tk.TclError as error:
             raise RuntimeError("Tkinter window is unavailable") from error
         root.title("Fly-in Drone Animation")
+        root.attributes("-fullscreen", True)
+        root.bind(
+            "<Escape>",
+            lambda _event: root.attributes("-fullscreen", False),
+        )
         closed = False
 
         def close_window() -> None:
@@ -151,8 +158,25 @@ class TerminalVisualizer:
                 pass
 
         root.protocol("WM_DELETE_WINDOW", close_window)
-        canvas = tk.Canvas(root, width=800, height=600, bg="white")
-        canvas.pack()
+        canvas = tk.Canvas(root, bg="white")
+        canvas.pack(fill="both", expand=True)
+        close_button = tk.Button(
+            root,
+            text="×",
+            command=close_window,
+            font=("Arial", 18, "bold"),
+            bg="#d32f2f",
+            fg="white",
+            activebackground="#b71c1c",
+            activeforeground="white",
+            borderwidth=0,
+            padx=12,
+            pady=4,
+        )
+        close_button.place(relx=1.0, x=-12, y=12, anchor="ne")
+
+        width = root.winfo_screenwidth()
+        height = root.winfo_screenheight()
 
         # Convert map coordinates to positions that fit inside the window.
         xs = [zone.x for zone in self.map_data.zones.values()]
@@ -163,7 +187,7 @@ class TerminalVisualizer:
             return 100 + (value - low) * (size - 200) / max(high - low, 1)
 
         points = {
-            name: (scale(zone.x, xs, 800), scale(zone.y, ys, 600))
+            name: (scale(zone.x, xs, width), scale(zone.y, ys, height))
             for name, zone in self.map_data.zones.items()
         }
         positions = {
@@ -207,7 +231,10 @@ class TerminalVisualizer:
                     x + offset, y, text=str(number), fill="white"
                 )
             canvas.create_text(
-                400, 25, text=f"Turn {turn_number}", font=("Arial", 16)
+                width / 2,
+                25,
+                text=f"Turn {turn_number}",
+                font=("Arial", 16),
             )
             try:
                 root.update()
@@ -231,7 +258,7 @@ class TerminalVisualizer:
                 if payload in points:
                     targets[number] = points[payload]
                 else:
-                    source, destination = payload.rsplit("-", 1)
+                    source, destination = payload.split("-", 1)
                     start = points[source]
                     end = points[destination]
                     targets[number] = (
@@ -257,7 +284,10 @@ class TerminalVisualizer:
         if closed:
             return
         canvas.create_text(
-            400, 570, text="All drones delivered!", font=("Arial", 16)
+            width / 2,
+            height - 30,
+            text="All drones delivered!",
+            font=("Arial", 16),
         )
         try:
             root.mainloop()

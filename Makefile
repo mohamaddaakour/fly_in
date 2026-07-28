@@ -1,8 +1,9 @@
 PYTHON = python
-MAP ?= maps/example.map
-MAPS_DIR ?= maps
 
-.PHONY: install run debug clean lint lint-strict test run-all benchmark
+# ?= Conditional assignment — only assigns if the variable is currently undefined
+MAP ?= maps/example.map
+
+.PHONY: install run debug clean lint lint-strict
 
 install:
 	$(PYTHON) -m pip install flake8 mypy pytest
@@ -23,6 +24,3 @@ lint:
 lint-strict:
 	flake8 .
 	mypy . --strict
-
-test:
-	$(PYTHON) -m unittest discover -s tests -v

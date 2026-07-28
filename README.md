@@ -164,5 +164,5 @@ output; official movement semantics remain identical.
 - [dataclasses documentation](https://docs.python.org/3/library/dataclasses.html)
 
 AI was used to help split the subject into implementation phases and to
-bootstrap the initial project structure. Each implementation step is reviewed
+bootstrap the initial project structure. Each implementation step is implemented, reviewed
 and tested manually as the project evolves.
